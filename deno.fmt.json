@@ -1,0 +1,20 @@
+{
+  "fmt": {
+    "exclude": [
+      ".agents/",
+      ".claude/",
+      ".gemini/",
+      ".github/",
+      ".kata/",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "GEMINI.md",
+      "OPENCODE.md",
+      "apm.lock.yaml",
+      "apm.yml",
+      "opencode.json",
+      "renovate.json",
+      "renri.toml"
+    ]
+  }
+}

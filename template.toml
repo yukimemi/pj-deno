@@ -41,6 +41,43 @@ how = "merge-toml"
 when = "once"
 paths = ["actions.deno_setup", "deno.version", "deno.os_matrix"]
 
+# `deno.json` seed for a project that doesn't have one yet: the
+# conventional task set (including the `ci` task this layer's
+# workflow invokes) plus the shared fmt policy. `when = "once"`, so
+# an EXISTING project is adopted untouched — its own tasks, imports
+# and fmt settings survive.
+[[file]]
+src = "deno.seed.json"
+dst = "deno.json"
+how = "overwrite"
+when = "once"
+
+# ...but `fmt.exclude` stays kata-managed, `when = "always"`.
+#
+# Without this, `deno task ci` FAILS on a fresh apply: `deno fmt`
+# formats markdown / json / yaml too, and the kata-managed files
+# (AGENTS.md, CLAUDE.md, apm.lock.yaml, the renri SKILL.md files, …)
+# are written by their upstream template, not by `deno fmt`. Running
+# `deno fmt` over them is not a fix either — they are
+# `when = "always"` files, so the formatting is reverted on the next
+# apply and `fmt --check` breaks again.
+#
+# `when = "always"` rather than a `once` seed on purpose: a `once`
+# entry against an existing `deno.json` is ADOPTED, so the exclude
+# list would never land in any project that predates this layer —
+# exactly the projects that need it. It also means a kata-managed
+# file added upstream later is covered on the next apply.
+#
+# The array is therefore LAYER-owned: project-specific exclusions go
+# in `deno.json`'s TOP-LEVEL `exclude` (which applies to fmt, lint
+# and check alike), not in `fmt.exclude`.
+[[file]]
+src = "deno.fmt.json"
+dst = "deno.json"
+how = "merge-json"
+when = "always"
+paths = ["fmt.exclude"]
+
 # CI workflow. Same `.tera` suffix story as pj-nvim / pj-denops:
 # (1) GitHub Actions only runs `.yml`/`.yaml` under
 # `.github/workflows/`, so the suffixed source isn't executed inside

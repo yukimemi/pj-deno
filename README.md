@@ -27,6 +27,8 @@ libraries. Use `pj-denops` for editor plugins.
 |---|---|---|
 | `.github/workflows/ci.yml` | overwrite, always | OS matrix running `deno task ci` |
 | `.kata/vars.toml` | merge-toml, once | `actions.deno_setup`, `deno.version`, `deno.os_matrix` |
+| `deno.json` | overwrite, once | Task set + fmt policy for a project without one |
+| `deno.json` | merge-json (`fmt.exclude`), always | Keeps `deno fmt --check` off kata-managed files |
 | `AGENTS.md` | merge-section, always | `<!-- kata:agents:deno:* -->` block |
 | `renovate.json` | merge-json (`extends`), always | Chains to this layer's `default.json` |
 
@@ -45,6 +47,29 @@ The workflow's only gate is `deno task ci`, so the consumer's
 
 Keeping the gate inside the project means a project can add a step
 (a build, an extra check) without touching a kata-managed file.
+
+A project that has no `deno.json` yet gets one seeded (`when =
+"once"`) with exactly that task set. An existing project is adopted
+untouched — it just has to define `ci` itself.
+
+## `fmt.exclude` is layer-owned
+
+`deno fmt` formats markdown, json and yaml, so the kata-managed
+files (`AGENTS.md`, `CLAUDE.md`, `apm.lock.yaml`, the renri
+`SKILL.md` files, the workflows) fail `deno fmt --check` the moment
+kata applies — they are written by their upstream template, not by
+`deno fmt`. Formatting them locally is not a fix: they are
+`when = "always"` files, so the next apply reverts it.
+
+So `fmt.exclude` lists them and is re-written on every apply
+(`deno.fmt.json` here). `when = "always"` rather than a `once` seed
+because a `once` entry against an existing `deno.json` is *adopted*,
+which would skip every project that predates this layer — exactly
+the ones that need it.
+
+Project-specific exclusions go in `deno.json`'s **top-level
+`exclude`** (honoured by fmt, lint and check alike), not in
+`fmt.exclude`.
 
 ## Knobs
 

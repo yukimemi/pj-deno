@@ -21,6 +21,31 @@ deno task test
 gate belongs in CI, add it to the `ci` task in `deno.json` — do not
 edit the workflow.
 
+### `fmt.exclude` in `deno.json` is kata-managed
+
+`deno fmt` formats markdown, json and yaml — including the
+kata-managed files (`AGENTS.md`, `CLAUDE.md`, `apm.lock.yaml`, the
+renri `SKILL.md` files, the workflows). Those are written by their
+upstream template, not by `deno fmt`, so `deno fmt --check` fails on
+them the moment kata applies.
+
+`fmt.exclude` therefore lists them and is re-written on every
+`kata apply` (source: `yukimemi/pj-deno/deno.fmt.json`). Do NOT put
+project-specific exclusions there — they would be dropped. Use
+`deno.json`'s **top-level `exclude`** instead, which applies to
+`fmt`, `lint` and `check` alike:
+
+```json
+{
+  "exclude": ["vendor/", "testdata/fixtures/"],
+  "fmt": { "exclude": ["... kata-managed, do not edit ..."] }
+}
+```
+
+And never run `deno fmt` over a kata-managed file to "fix" it: those
+files are `when = "always"`, so the next apply reverts the
+formatting and the gate breaks again.
+
 ### Dependency versions live in `deno.json` imports
 
 Ranges in the `imports` map are Renovate-managed (`rangeStrategy:
