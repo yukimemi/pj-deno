@@ -1,0 +1,87 @@
+name = "pj-deno"
+version = "0.1.0"
+
+# Plain Deno project layer — apps, CLIs, scrapers, JSR libraries.
+# Compose under `pj-base`.
+#
+# Two layers only: Deno ships its own toolchain, formatter, linter,
+# type checker and test runner, so there is no toolchain/build layer
+# between this and pj-base (the same shape as pj-nvim / pj-denops).
+#
+# NOT for Denops plugins — `pj-denops` exists for those. That layer
+# installs real Vim / Neovim binaries and exports
+# DENOPS_TEST_VIM_EXECUTABLE, which a plain Deno project has no use
+# for. This layer is the plain "setup-deno + deno task ci" workflow
+# that pj-denops explicitly is not.
+#
+# CONTRACT: the consumer's `deno.json` must define a `ci` task. The
+# rendered workflow's only gate is `deno task ci`, so the project
+# decides what CI means (check / lint / fmt --check / test is the
+# convention across these repos).
+
+# Variables first: `ci.yml.tera` reads `deno.os_matrix` and
+# `deno.version` from the consumer's `.kata/vars.toml`, so this entry
+# has to land before the workflow is rendered on a first apply.
+# (`ci.yml.tera` also guards every lookup with `is defined`, so a
+# stale consumer still renders — this ordering is what makes the
+# values actually take effect.)
+#
+# `merge-toml` with an explicit `paths` list writes only these keys,
+# leaving pj-base's universal pins (checkout, create_pull_request,
+# claude_code_action) untouched.
+#
+# `when = "once"`: all three are CONSUMER-owned. `actions.deno_setup`
+# is bumped in-place by Renovate's customManager, and `os_matrix` /
+# `version` are per-project choices — a `when = "always"` back-fill
+# would revert both on every apply.
+[[file]]
+src = "vars.deno.toml"
+dst = ".kata/vars.toml"
+how = "merge-toml"
+when = "once"
+paths = ["actions.deno_setup", "deno.version", "deno.os_matrix"]
+
+# CI workflow. Same `.tera` suffix story as pj-nvim / pj-denops:
+# (1) GitHub Actions only runs `.yml`/`.yaml` under
+# `.github/workflows/`, so the suffixed source isn't executed inside
+# pj-deno itself; (2) kata Tera-renders `.tera` files at apply time
+# and strips the suffix, so consumers receive `ci.yml`.
+#
+# Action versions reference `vars.actions.checkout` (from pj-base)
+# and `vars.actions.deno_setup` (from vars.deno.toml), all pinned in
+# `.kata/vars.toml` and bumped by Renovate's customManager.
+[[file]]
+src = ".github/workflows/ci.yml.tera"
+dst = ".github/workflows/ci.yml"
+how = "overwrite"
+when = "always"
+
+# Deno-layer agent guidance — task commands, the `deno task ci`
+# contract, and the kata-managed-file notes. Lives inside its own
+# marker block so pj-base's language-agnostic block can coexist in
+# the same AGENTS.md.
+[[file]]
+src = "AGENTS.md.deno"
+dst = "AGENTS.md"
+how = "merge-section"
+when = "always"
+marker = { begin = "<!-- kata:agents:deno:begin -->", end = "<!-- kata:agents:deno:end -->" }
+
+# Renovate: repoint the consumer's `extends` at THIS layer's own
+# preset (`default.json`), which extends the layer below it and adds
+# whatever rules this layer owns.
+#
+# Every layer ships this same entry naming ITSELF; kata's compose rule
+# (last layer wins on file conflicts) then resolves `extends` to the
+# topmost APPLIED layer automatically. No layer needs to know what
+# sits above it, and no preset var is involved.
+#
+# `how = "merge-json"` with `paths = ["extends"]` rewrites ONLY the
+# `extends` array, leaving any consumer-added keys (labels, extra
+# packageRules, …) untouched — unlike a blanket overwrite. The same
+# `renovate.json` doubles as this repo's OWN Renovate config.
+[[file]]
+src = "renovate.json"
+how = "merge-json"
+when = "always"
+paths = ["extends"]

@@ -1,0 +1,62 @@
+{#- Resolve pins from `.kata/vars.toml`. pj-base seeds
+    `actions.checkout`; pj-deno seeds the rest.
+
+    Every deno-layer lookup is guarded with `is defined` +
+    `set_global` rather than a `default(...)` filter: kata's Tera
+    render is strict, so an undefined variable aborts `kata apply`
+    for every existing consumer whose `.kata/vars.toml` predates a
+    key. Tera also cannot express an empty-map fallback
+    (`default(value={})` is a parse error), so the intermediate
+    `vars.deno` table has to be probed with `is defined` too.
+    `set_global` because a plain `set` inside an `if` would not
+    escape the block.
+
+    GitHub Actions expressions share Tera's `{{ }}` delimiters, so
+    every `${{ … }}` below is wrapped in `{% raw %}` to survive
+    rendering. -#}
+{%- set act = vars.actions -%}
+{%- set_global deno_setup = "v2" -%}
+{%- set_global deno_version = "2.x" -%}
+{%- set_global os_matrix = ["ubuntu-latest", "macos-latest", "windows-latest"] -%}
+{%- if act.deno_setup is defined -%}
+{%- set_global deno_setup = act.deno_setup -%}
+{%- endif -%}
+{%- if vars.deno is defined and vars.deno.version is defined -%}
+{%- set_global deno_version = vars.deno.version -%}
+{%- endif -%}
+{%- if vars.deno is defined and vars.deno.os_matrix is defined -%}
+{%- set_global os_matrix = vars.deno.os_matrix -%}
+{%- endif -%}
+# kata-managed — source: yukimemi/pj-deno/.github/workflows/ci.yml.tera
+# Local edits are reverted on the next `kata apply`. Push fixes upstream.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    name: {% raw %}ci (${{ matrix.os }}){% endraw %}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [{% for os in os_matrix %}{{ os }}{% if not loop.last %}, {% endif %}{% endfor %}]
+    runs-on: {% raw %}${{ matrix.os }}{% endraw %}
+    steps:
+      - uses: actions/checkout@{{ act.checkout }}
+
+      - uses: denoland/setup-deno@{{ deno_setup }}
+        with:
+          deno-version: "{{ deno_version }}"
+
+      # The single gate. `ci` is the project's own task, so what it
+      # covers is the project's call — `deno check && deno lint &&
+      # deno fmt --check && deno test` is the convention here.
+      #
+      # No `shell:` override on purpose: each runner's default shell
+      # is used. Forcing `shell: bash` routes Windows through Git
+      # Bash, which rewrites Windows-style paths passed to Deno.
+      - name: Run CI
+        run: deno task ci

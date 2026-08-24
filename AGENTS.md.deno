@@ -1,0 +1,106 @@
+### Deno project workflow
+
+This repo follows the shared plain-Deno conventions. The
+language-agnostic conventions block above (`kata:agents:base:*`)
+covers git workflow, PR review cycle, and worktree usage.
+
+### Task commands
+
+Deno ships the whole toolchain, so every gate is a `deno task`:
+
+```sh
+deno task ci      # the CI gate — run this before pushing
+deno task check   # type check
+deno task lint
+deno task fmt     # add --check to gate instead of rewrite
+deno task test
+```
+
+`deno task ci` is a **contract with this layer**: the rendered
+`.github/workflows/ci.yml` runs exactly that one command. If a new
+gate belongs in CI, add it to the `ci` task in `deno.json` — do not
+edit the workflow.
+
+### Dependency versions live in `deno.json` imports
+
+Ranges in the `imports` map are Renovate-managed (`rangeStrategy:
+"bump"`). Two rules:
+
+- **Never list the same specifier twice.** JSON duplicate keys are
+  last-wins and silently defeat Renovate — it bumps one occurrence
+  and the other keeps pinning the old range. `deno check` does not
+  flag it either.
+- **Wait out `minimumReleaseAge`.** Deno enforces its own
+  `minimumDependencyAge` (24h by default) at resolve time, so a PR
+  opened minutes after a JSR publish fails CI with "Could not find
+  version … that matches specified version constraint". pj-base sets
+  Renovate's `minimumReleaseAge` to 3 days to stay clear of it; don't
+  hand-bump a JSR dep published today.
+
+### CI workflow
+
+`.github/workflows/ci.yml` is kata-managed. The source lives in
+`yukimemi/pj-deno/.github/workflows/ci.yml.tera` (the `.tera` suffix
+keeps GitHub Actions from running the source inside pj-deno itself
+and opts the file into kata's Tera rendering). Action versions are
+pinned in `.kata/vars.toml` and bumped by Renovate, so don't edit
+them inline in the workflow — the bump would be clobbered on the
+next apply.
+
+Two knobs live in `.kata/vars.toml` and are consumer-owned:
+
+```toml
+[deno]
+version = "2.x"                                   # setup-deno deno-version
+os_matrix = ["ubuntu-latest", "windows-latest"]    # CI runners
+```
+
+Trimming `os_matrix` changes which leg names exist, so update branch
+protection to match.
+
+### Auto-merge preconditions (one-time, per repository)
+
+Merging is GitHub's native auto-merge, armed by Renovate
+(`platformAutomerge`) and by pj-base's `kata-apply` / `apm-bump`
+workflows via `gh pr merge --auto`. Three repo-side settings are
+required, and none of them can ship from a template — a freshly
+created project has to be onboarded by hand, exactly like the
+pj-rust / pj-denops / pj-nvim lines:
+
+* **`KATA_APPLY_TOKEN` secret** — a PAT with write access to the repo.
+  `kata-apply.yml` / `apm-bump.yml` check out and push with it rather
+  than `GITHUB_TOKEN`, whose pushes never trigger CI. Without it the
+  job dies at checkout with `Input required and not supplied: token`.
+* **`allow_auto_merge` enabled** on the repository.
+* **Branch protection on `main`** requiring `ci (ubuntu-latest)`.
+  GitHub only arms auto-merge on a pull request that is currently
+  blocked; with no required check the PR is immediately mergeable and
+  the request is rejected with `Pull request is in clean status` or
+  `Branch does not have required protected branch rules`.
+
+Only the ubuntu leg is required on purpose. The macOS / Windows legs
+still run and still have to be read, but a flaky runner must not
+wedge every dependency PR.
+
+```sh
+gh secret set KATA_APPLY_TOKEN --repo yukimemi/<project>
+gh repo edit yukimemi/<project> --enable-auto-merge
+gh api -X PUT repos/yukimemi/<project>/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": { "strict": false, "contexts": ["ci (ubuntu-latest)"] },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+JSON
+```
+
+Skipping these is silent: the project looks fine, but `kata-apply`
+fails every night and no template update ever reaches the repo.
+
+### Renovate automerge scope
+
+`minor` / `patch` / `pin` / `digest` bumps automerge once
+`ci (ubuntu-latest)` passes. **`major` bumps never automerge** — they
+wait for a human. A stale major PR is expected, not a broken
+pipeline.
