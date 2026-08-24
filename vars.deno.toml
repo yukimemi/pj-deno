@@ -33,5 +33,10 @@ version = "2.x"
 # (`ci (<os>)`), so dropping `ubuntu-latest` means updating branch
 # protection too.
 #
+# On a PRIVATE repo the matrix is metered, and the multipliers are
+# not subtle: macOS bills 10x and Windows 2x the ubuntu rate, so the
+# full three costs ~13x a ubuntu-only run. Trim it there unless the
+# project actually has per-OS behaviour to defend.
+#
 # CONSUMER-OWNED: seeded once on first apply, never overwritten.
 os_matrix = ["ubuntu-latest", "macos-latest", "windows-latest"]
