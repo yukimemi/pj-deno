@@ -52,6 +52,27 @@ A project that has no `deno.json` yet gets one seeded (`when =
 "once"`) with exactly that task set. An existing project is adopted
 untouched — it just has to define `ci` itself.
 
+## Prerequisite: `deno.json`, strict JSON
+
+**Not `deno.jsonc`, and no comments.** Both edges are real and were
+verified against kata 0.15.0:
+
+- kata's `merge-json` parses the existing file with strict
+  `serde_json`, so one `//` comment makes every `kata apply` exit 1
+  (`parsing existing …: key must be a string`). `kata-apply.yml` runs
+  `kata apply` as a bare step, so the daily template sweep then fails
+  forever and no upstream fix ever reaches the repo. Teaching kata to
+  read JSONC would not help: re-serialisation drops the comments it
+  just parsed.
+- the `once` gate keys on the destination *path*, so a project whose
+  config is `deno.jsonc` is not adopted — kata writes a fresh
+  `deno.json` beside it, Deno prefers `deno.json`, and the project's
+  real import map, tasks and JSR `exports` are silently ignored.
+  `deno check .` then fails with `TS2307 … not in import map`.
+
+Convert `deno.jsonc` into a comment-free `deno.json` before adding
+this layer.
+
 ## `fmt.exclude` is layer-owned
 
 `deno fmt` formats markdown, json and yaml, so the kata-managed

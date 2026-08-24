@@ -1,11 +1,11 @@
 {
   "tasks": {
     "check": "deno check .",
-    "lint": "deno lint",
+    "lint": "deno lint --permit-no-files",
     "fmt": "deno fmt",
-    "test": "deno test -A",
+    "test": "deno test -A --permit-no-files",
     "ci": "deno task check && deno task lint && deno task fmt --check && deno task test",
-    "hooks:install": "deno run --allow-read=deno.json,.git/hooks/ --allow-write=.git/hooks/ jsr:@hongminhee/deno-task-hooks",
+    "hooks:install": "deno run --allow-read=deno.json,.git/hooks/ --allow-write=.git/hooks/ jsr:@hongminhee/deno-task-hooks@^0.1.2",
     "hooks:pre-commit": "deno task ci",
     "hooks:pre-push": "deno task ci"
   },

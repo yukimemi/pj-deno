@@ -12,6 +12,7 @@
       "OPENCODE.md",
       "apm.lock.yaml",
       "apm.yml",
+      "deno.json",
       "opencode.json",
       "renovate.json",
       "renri.toml"

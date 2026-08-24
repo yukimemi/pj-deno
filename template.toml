@@ -18,6 +18,26 @@ version = "0.1.0"
 # rendered workflow's only gate is `deno task ci`, so the project
 # decides what CI means (check / lint / fmt --check / test is the
 # convention across these repos).
+#
+# PREREQUISITE — the config file must be `deno.json` holding STRICT
+# JSON, not `deno.jsonc` and not JSON-with-comments. Two hard edges,
+# both verified against kata 0.15.0:
+#
+#   * kata's `merge-json` parses the existing file with strict
+#     `serde_json`, so a single `//` comment makes every `kata apply`
+#     exit 1 (`parsing existing …: key must be a string`). Since
+#     `kata-apply.yml` runs `kata apply` as a bare step, the daily
+#     template sweep then fails forever. Round-tripping JSONC is not
+#     the fix either: re-serialisation would silently drop the
+#     comments it just parsed.
+#   * the `once` gate keys on the destination PATH, so a project
+#     keeping its config in `deno.jsonc` is NOT adopted — kata writes
+#     a fresh `deno.json` beside it, Deno prefers `deno.json`, and the
+#     project's real import map / tasks / JSR `exports` go silently
+#     ignored.
+#
+# Convert `deno.jsonc` -> comment-free `deno.json` BEFORE adding this
+# layer.
 
 # Variables first: `ci.yml.tera` reads `deno.os_matrix` and
 # `deno.version` from the consumer's `.kata/vars.toml`, so this entry
@@ -30,16 +50,48 @@ version = "0.1.0"
 # leaving pj-base's universal pins (checkout, create_pull_request,
 # claude_code_action) untouched.
 #
-# `when = "once"`: all three are CONSUMER-owned. `actions.deno_setup`
-# is bumped in-place by Renovate's customManager, and `os_matrix` /
-# `version` are per-project choices — a `when = "always"` back-fill
-# would revert both on every apply.
+# `when = "once"`: all three are CONSUMER-owned after seeding.
+# `actions.deno_setup` is bumped in-place by Renovate's
+# customManager, and `os_matrix` / `version` are per-project choices —
+# a `when = "always"` back-fill would revert both on every apply.
 [[file]]
 src = "vars.deno.toml"
 dst = ".kata/vars.toml"
 how = "merge-toml"
 when = "once"
 paths = ["actions.deno_setup", "deno.version", "deno.os_matrix"]
+
+# ...but `actions.deno_setup` also needs a `when = "always"`
+# back-fill, for the same reason pj-base back-fills
+# `actions.claude_code_action` (pj-base/template.toml, the second
+# `vars.toml` entry).
+#
+# kata records the `once` gate per destination, and pj-base writes
+# `.kata/vars.toml` on the project's FIRST apply. A project that
+# adopts this layer later — `kata add github.com/yukimemi/pj-deno`
+# on top of an existing base-only project — gets
+# `skipped .kata/vars.toml` and never receives the pin. Consequence:
+# pj-base's customManager finds no `deno_setup` to scan, so
+# `denoland/setup-deno` freezes at `ci.yml.tera`'s hardcoded fallback
+# and Renovate never opens a PR for it.
+#
+# Only the pin is back-filled. `deno.version` / `deno.os_matrix` stay
+# `once`-only because they are genuinely per-project (a late adopter
+# adds them by hand); resetting `os_matrix` on every apply would undo
+# a deliberate matrix trim.
+#
+# Back-filling flips WHERE the pin is bumped: an apply would revert a
+# consumer-side Renovate bump, so `default.json` disables Renovate
+# for `denoland/setup-deno` in `.kata/vars.toml` and the canonical
+# bump happens HERE, in `vars.deno.toml` (pj-base's customManager
+# scans `vars.<layer>.toml`), reaching every consumer on the next
+# apply. Same ownership model as pj-base's `claude_code_action`.
+[[file]]
+src = "vars.deno.toml"
+dst = ".kata/vars.toml"
+how = "merge-toml"
+when = "always"
+paths = ["actions.deno_setup"]
 
 # `deno.json` seed for a project that doesn't have one yet: the
 # conventional task set (including the `ci` task this layer's

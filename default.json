@@ -7,6 +7,12 @@
       "matchManagers": ["github-actions"],
       "matchFileNames": [".github/workflows/ci.yml"],
       "enabled": false
+    },
+    {
+      "description": "`actions.deno_setup` is kata-managed in consumer repos: pj-deno back-fills it into `.kata/vars.toml` with `merge-toml, when = \"always\"` so that a project adopting this layer late (`kata add`, where the `once` seed is skipped) still gets the pin. That back-fill means a consumer-side bump is reverted on the next apply, re-opened by Renovate, and so on forever. The canonical bump therefore happens upstream in pj-deno's own `vars.deno.toml` — which pj-base's customManager scans via its `vars.<layer>.toml` pattern — and flows down to every consumer on the next `kata apply`. Scoped to `.kata/vars.toml` so pj-deno's own seed file is still scanned. Same ownership model as pj-base's `anthropics/claude-code-action` rule.",
+      "matchDepNames": ["denoland/setup-deno"],
+      "matchFileNames": [".kata/vars.toml"],
+      "enabled": false
     }
   ]
 }

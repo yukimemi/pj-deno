@@ -46,6 +46,30 @@ And never run `deno fmt` over a kata-managed file to "fix" it: those
 files are `when = "always"`, so the next apply reverts the
 formatting and the gate breaks again.
 
+`deno.json` itself is in the exclude list for the same reason: kata's
+`merge-json` re-serialises the whole document with its own hard-coded
+2-space, spaces-only pretty printer, which would fight a project
+whose `fmt` config differs (`useTabs`, a wider `indentWidth`).
+
+### `deno.json` must stay strict JSON
+
+**Never add a comment to `deno.json`, and never rename it to
+`deno.jsonc`.** Deno accepts both, kata does not:
+
+- kata's `merge-json` parses the existing file with strict
+  `serde_json`. One `//` comment and every `kata apply` exits 1 with
+  `parsing existing …: key must be a string` — including the daily
+  `kata-apply.yml` run, so upstream template fixes stop arriving
+  entirely. The failure is silent from inside the repo: nothing looks
+  broken, the sweep is just always red.
+- `deno.jsonc` is worse. kata's `once` gate keys on the destination
+  path, so a `deno.jsonc` project is not adopted: kata writes a fresh
+  `deno.json` next to it, Deno prefers `deno.json`, and the real
+  import map / tasks / JSR `exports` are ignored. `deno check .` then
+  fails with `TS2307 … not in import map`.
+
+Put explanatory prose in this file instead.
+
 ### Dependency versions live in `deno.json` imports
 
 Ranges in the `imports` map are Renovate-managed (`rangeStrategy:
